@@ -9,31 +9,31 @@ import com.yupi.springbootinit.common.DeleteRequest;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.common.ResultUtils;
 import com.yupi.springbootinit.constant.CommonConstant;
+import com.yupi.springbootinit.constant.FileConstant;
 import com.yupi.springbootinit.constant.UserConstant;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.exception.ThrowUtils;
-import com.yupi.springbootinit.model.dto.chart.ChartAddRequest;
-import com.yupi.springbootinit.model.dto.chart.ChartEditRequest;
-import com.yupi.springbootinit.model.dto.chart.ChartQueryRequest;
-import com.yupi.springbootinit.model.dto.chart.ChartUpdateRequest;
+import com.yupi.springbootinit.model.dto.chart.*;
 import com.yupi.springbootinit.model.entity.Chart;
 import com.yupi.springbootinit.model.entity.User;
+import com.yupi.springbootinit.model.enums.FileUploadBizEnum;
 import com.yupi.springbootinit.service.ChartService;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 
 import com.yupi.springbootinit.service.UserService;
+import com.yupi.springbootinit.utils.ExcelUtils;
 import com.yupi.springbootinit.utils.SqlUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.File;
 
 /**
  * 帖子接口
@@ -53,6 +53,31 @@ public class ChartController {
     private UserService userService;
 
     private final static Gson GSON = new Gson();
+
+
+    /**
+     * AI生成图表文件
+     * @param multipartFile
+     * @param uploadFileRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/gen")
+    public BaseResponse<String> genChartByAI(@RequestPart("file") MultipartFile multipartFile,
+                                             GenChartByAIRequest genChartByAIRequest, HttpServletRequest request) {
+        String name = genChartByAIRequest.getName(); // 图表名
+        String goal = genChartByAIRequest.getGoal(); // 图标目标
+        String chartType = genChartByAIRequest.getChartType(); // 图标的类型
+        // 校验  =》 分析目标不为null，图标名称要在20个字符以内
+        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
+        ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 20, ErrorCode.PARAMS_ERROR, "名称长度应该控制在20字符以内");
+        String stringResult = ExcelUtils.excelToCSV(multipartFile);
+        StringBuilder userInput = new StringBuilder();
+        userInput.append("你是一名数据分析师，请基于我给出的分析目标和数据进行数据分析").append("\n");
+        userInput.append("分析目标：").append(goal).append("\n");
+        userInput.append("数据：").append("\n").append(stringResult);
+        return ResultUtils.success(userInput.toString());
+    }
 
 
     /**
@@ -151,7 +176,7 @@ public class ChartController {
      */
     @PostMapping("/list/page")
     public BaseResponse<Page<Chart>> listChartByPage(@RequestBody ChartQueryRequest chartQueryRequest,
-                                                       HttpServletRequest request) {
+                                                     HttpServletRequest request) {
         long current = chartQueryRequest.getCurrent();
         long size = chartQueryRequest.getPageSize();
         // 限制爬虫
@@ -170,7 +195,7 @@ public class ChartController {
      */
     @PostMapping("/my/list/page")
     public BaseResponse<Page<Chart>> listMyChartByPage(@RequestBody ChartQueryRequest chartQueryRequest,
-                                                         HttpServletRequest request) {
+                                                       HttpServletRequest request) {
         if (chartQueryRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
@@ -229,9 +254,11 @@ public class ChartController {
         Long userId = chartQueryRequest.getUserId();
         String sortField = chartQueryRequest.getSortField();
         String sortOrder = chartQueryRequest.getSortOrder();
+        String name = chartQueryRequest.getName();
         // 拼接查询条件
         queryWrapper.eq(id != null && id > 0, "id", id);
         queryWrapper.eq(StringUtils.isNotBlank(goal), "goal", goal);
+        queryWrapper.like(StringUtils.isNotBlank(name), "name", name); // 根据名称模糊查询
         queryWrapper.eq(ObjectUtils.isNotEmpty(userId), "userId", userId);
         queryWrapper.eq(ObjectUtils.isNotEmpty(chartType), "chartType", chartType);
         queryWrapper.eq("isDelete", false);
