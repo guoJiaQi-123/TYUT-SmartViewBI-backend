@@ -9,14 +9,14 @@ import com.yupi.springbootinit.common.DeleteRequest;
 import com.yupi.springbootinit.common.ErrorCode;
 import com.yupi.springbootinit.common.ResultUtils;
 import com.yupi.springbootinit.constant.CommonConstant;
-import com.yupi.springbootinit.constant.FileConstant;
 import com.yupi.springbootinit.constant.UserConstant;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.exception.ThrowUtils;
+import com.yupi.springbootinit.manager.AiManager;
 import com.yupi.springbootinit.model.dto.chart.*;
 import com.yupi.springbootinit.model.entity.Chart;
 import com.yupi.springbootinit.model.entity.User;
-import com.yupi.springbootinit.model.enums.FileUploadBizEnum;
+import com.yupi.springbootinit.model.vo.AiResponse;
 import com.yupi.springbootinit.service.ChartService;
 
 import javax.annotation.Resource;
@@ -27,19 +27,16 @@ import com.yupi.springbootinit.utils.ExcelUtils;
 import com.yupi.springbootinit.utils.SqlUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
-import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
-
 /**
  * 帖子接口
  *
- * @author <a href="https://github.com/liyupi">程序员鱼皮</a>
- * @from <a href="https://yupi.icu">编程导航知识星球</a>
+ * @author <a href="https://blog.csdn.net/guojiaqi_">oldGj</a>
+ * @from <a href="https://github.com/guoJiaQi-123/TYUT-SmartViewBI-backend">GitHub地址</a>
  */
 @RestController
 @RequestMapping("/chart")
@@ -47,10 +44,13 @@ import java.io.File;
 public class ChartController {
 
     @Resource
-    private ChartService chartService;
+    private ChartService chartService; // 图表业务层
 
     @Resource
-    private UserService userService;
+    private UserService userService; // 用户业务层
+
+    @Resource
+    private AiManager aiManager; // AI智能生成内容
 
     private final static Gson GSON = new Gson();
 
@@ -58,25 +58,51 @@ public class ChartController {
     /**
      * AI生成图表文件
      * @param multipartFile
-     * @param uploadFileRequest
      * @param request
      * @return
      */
     @PostMapping("/gen")
-    public BaseResponse<String> genChartByAI(@RequestPart("file") MultipartFile multipartFile,
-                                             GenChartByAIRequest genChartByAIRequest, HttpServletRequest request) {
+    public BaseResponse<AiResponse> genChartByAI(@RequestPart("file") MultipartFile multipartFile,
+                                                 GenChartByAIRequest genChartByAIRequest, HttpServletRequest request) {
         String name = genChartByAIRequest.getName(); // 图表名
         String goal = genChartByAIRequest.getGoal(); // 图标目标
         String chartType = genChartByAIRequest.getChartType(); // 图标的类型
+        User loginUser = userService.getLoginUser(request);
         // 校验  =》 分析目标不为null，图标名称要在20个字符以内
         ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
         ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 20, ErrorCode.PARAMS_ERROR, "名称长度应该控制在20字符以内");
-        String stringResult = ExcelUtils.excelToCSV(multipartFile);
+        String csvData = ExcelUtils.excelToCSV(multipartFile);
+        if (chartType != null) {
+            goal += "请使用：" + chartType;
+        }
         StringBuilder userInput = new StringBuilder();
-        userInput.append("你是一名数据分析师，请基于我给出的分析目标和数据进行数据分析").append("\n");
-        userInput.append("分析目标：").append(goal).append("\n");
-        userInput.append("数据：").append("\n").append(stringResult);
-        return ResultUtils.success(userInput.toString());
+        userInput.append("分析需求：").append("\n");
+        userInput.append(goal).append("\n");
+        userInput.append("原始数据：").append("\n");
+        userInput.append(csvData);
+        final long aiModelId = 1659171950288818178L; // 模型ID
+        String aiResponse = aiManager.doChat(aiModelId, userInput.toString());
+        String[] split = aiResponse.split("【【【【【"); // 按照分隔符拆分
+        // 校验
+        if (split.length < 3) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "智能生成内容失败");
+        }
+        String genChart = split[1].trim(); // 图标数据
+        String genResult = split[2].trim(); // 结论数据
+
+        // 将图表数据保存到数据库
+        Chart chart = new Chart();
+        chart.setName(name);
+        chart.setGoal(goal);
+        chart.setChartData(csvData);
+        chart.setChartType(chartType);
+        chart.setGenChart(genChart);
+        chart.setGenResult(genResult);
+        chart.setUserId(loginUser.getId());
+        boolean save = chartService.save(chart);
+        ThrowUtils.throwIf(!save, ErrorCode.SYSTEM_ERROR, "图表保存失败");
+        AiResponse response = new AiResponse(genChart, genResult, chart.getId()); // 构造返回值
+        return ResultUtils.success(response);
     }
 
 

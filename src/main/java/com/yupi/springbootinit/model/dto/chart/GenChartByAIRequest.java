@@ -7,8 +7,8 @@ import java.io.Serializable;
 /**
  * 文件上传请求
  *
- * @author <a href="https://github.com/liyupi">程序员鱼皮</a>
- * @from <a href="https://yupi.icu">编程导航知识星球</a>
+ * @author <a href="https://blog.csdn.net/guojiaqi_">oldGj</a>
+ * @from <a href="https://github.com/guoJiaQi-123/TYUT-SmartViewBI-backend">GitHub地址</a>
  */
 @Data
 public class GenChartByAIRequest implements Serializable {

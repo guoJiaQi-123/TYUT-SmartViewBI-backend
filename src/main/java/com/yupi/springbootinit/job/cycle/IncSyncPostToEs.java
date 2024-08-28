@@ -15,8 +15,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 /**
  * 增量同步帖子到 es
  *
- * @author <a href="https://github.com/liyupi">程序员鱼皮</a>
- * @from <a href="https://yupi.icu">编程导航知识星球</a>
+ * @author <a href="https://blog.csdn.net/guojiaqi_">oldGj</a>
+ * @from <a href="https://github.com/guoJiaQi-123/TYUT-SmartViewBI-backend">GitHub地址</a>
  */
 // todo 取消注释开启任务
 //@Component

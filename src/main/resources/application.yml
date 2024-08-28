@@ -1,6 +1,6 @@
 # 公共配置文件
-# @author <a href="https://github.com/liyupi">程序员鱼皮</a>
-# @from <a href="https://yupi.icu">编程导航知识星球</a>
+# @author <a href="https://blog.csdn.net/guojiaqi_">oldGj</a>
+# @from <a href="https://github.com/guoJiaQi-123/TYUT-SmartViewBI-backend">GitHub地址</a>
 spring:
   application:
     name: tyut-bi-backend
@@ -90,3 +90,7 @@ cos:
     secretKey: xxx
     region: xxx
     bucket: xxx
+yuapi:
+  client:
+    access-key: es7ly2tgbkseikiaapwc3morax5fdo9m
+    secret-key: jw4vl8k5qh4d6egezg78fkfib5mkjzy9

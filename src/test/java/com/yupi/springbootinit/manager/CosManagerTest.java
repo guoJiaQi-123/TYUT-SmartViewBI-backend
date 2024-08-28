@@ -7,8 +7,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 /**
  * Cos 操作测试
  *
- * @author <a href="https://github.com/liyupi">程序员鱼皮</a>
- * @from <a href="https://yupi.icu">编程导航知识星球</a>
+ * @author <a href="https://blog.csdn.net/guojiaqi_">oldGj</a>
+ * @from <a href="https://github.com/guoJiaQi-123/TYUT-SmartViewBI-backend">GitHub地址</a>
  */
 @SpringBootTest
 class CosManagerTest {
