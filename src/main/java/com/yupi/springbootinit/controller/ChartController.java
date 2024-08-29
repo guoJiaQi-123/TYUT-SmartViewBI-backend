@@ -1,5 +1,6 @@
 package com.yupi.springbootinit.controller;
 
+import cn.hutool.core.io.FileUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.google.gson.Gson;
@@ -13,6 +14,7 @@ import com.yupi.springbootinit.constant.UserConstant;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.exception.ThrowUtils;
 import com.yupi.springbootinit.manager.AiManager;
+import com.yupi.springbootinit.manager.RedisLimiterManager;
 import com.yupi.springbootinit.model.dto.chart.*;
 import com.yupi.springbootinit.model.entity.Chart;
 import com.yupi.springbootinit.model.entity.User;
@@ -20,6 +22,7 @@ import com.yupi.springbootinit.model.vo.AiResponse;
 import com.yupi.springbootinit.service.ChartService;
 
 import javax.annotation.Resource;
+import javax.management.relation.Role;
 import javax.servlet.http.HttpServletRequest;
 
 import com.yupi.springbootinit.service.UserService;
@@ -31,6 +34,10 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * 帖子接口
@@ -52,6 +59,9 @@ public class ChartController {
     @Resource
     private AiManager aiManager; // AI智能生成内容
 
+    @Resource
+    private RedisLimiterManager redisLimiterManager;
+
     private final static Gson GSON = new Gson();
 
 
@@ -65,12 +75,23 @@ public class ChartController {
     public BaseResponse<AiResponse> genChartByAI(@RequestPart("file") MultipartFile multipartFile,
                                                  GenChartByAIRequest genChartByAIRequest, HttpServletRequest request) {
         String name = genChartByAIRequest.getName(); // 图表名
-        String goal = genChartByAIRequest.getGoal(); // 图标目标
+        String goal = genChartByAIRequest.getGoal(); // 图表目标
         String chartType = genChartByAIRequest.getChartType(); // 图标的类型
         User loginUser = userService.getLoginUser(request);
         // 校验  =》 分析目标不为null，图标名称要在20个字符以内
         ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
         ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 20, ErrorCode.PARAMS_ERROR, "名称长度应该控制在20字符以内");
+        // 文件校验
+        String filename = multipartFile.getOriginalFilename();
+        long size = multipartFile.getSize();
+        final long ONE_MB = 1024 * 1024L;
+        ThrowUtils.throwIf(size > ONE_MB, ErrorCode.SYSTEM_ERROR, "文件大小超过1MB");
+        String fileSuffix = FileUtil.getSuffix(filename);
+        List<String> validFileSuffix = Arrays.asList("png", "jpg", "svg");
+        ThrowUtils.throwIf(!validFileSuffix.contains(fileSuffix), ErrorCode.SYSTEM_ERROR, "文件后缀非法");
+        // 在基础校验过后进行限流
+        redisLimiterManager.doRateLimit("genChartByAI_" + loginUser.getId());
+
         String csvData = ExcelUtils.excelToCSV(multipartFile);
         if (chartType != null) {
             goal += "请使用：" + chartType;
@@ -81,7 +102,11 @@ public class ChartController {
         userInput.append("原始数据：").append("\n");
         userInput.append(csvData);
         final long aiModelId = 1659171950288818178L; // 模型ID
+        final String role = "user";
+        // 鱼聪明AI
         String aiResponse = aiManager.doChat(aiModelId, userInput.toString());
+        // 百度千帆大模型AI 【prompt优化暂时不到位】
+//        String aiResponse = aiManager.doChatByQianFan(role, userInput.toString());
         String[] split = aiResponse.split("【【【【【"); // 按照分隔符拆分
         // 校验
         if (split.length < 3) {

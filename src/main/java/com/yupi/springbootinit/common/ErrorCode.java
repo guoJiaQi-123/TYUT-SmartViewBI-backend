@@ -39,7 +39,11 @@ public enum ErrorCode {
     /**
      * 操作失败
      */
-    OPERATION_ERROR(50001, "操作失败");
+    OPERATION_ERROR(50001, "操作失败"),
+    /**
+     * 请求过于频繁
+     */
+    TOO_MANY_REQUEST(42900,"请求过于频繁" );
 
     /**
      * 状态码
