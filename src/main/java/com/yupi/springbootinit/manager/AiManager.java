@@ -40,8 +40,7 @@ public class AiManager {
      * @return
      */
    /* public String doChatByQianFan(String role, String content) {
-        final String AccessKey = "";
-        final String SecretKey = "";
+        
         Qianfan qianfan = new Qianfan(AccessKey, SecretKey);
         ChatResponse resp = qianfan.chatCompletion()
                 .model("ERNIE-Speed-128K")
