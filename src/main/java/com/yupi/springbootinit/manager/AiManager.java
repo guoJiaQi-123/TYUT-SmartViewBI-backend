@@ -39,7 +39,7 @@ public class AiManager {
      * @param content
      * @return
      */
-    public String doChatByQianFan(String role, String content) {
+   /* public String doChatByQianFan(String role, String content) {
         final String AccessKey = "";
         final String SecretKey = "";
         Qianfan qianfan = new Qianfan(AccessKey, SecretKey);
@@ -101,6 +101,6 @@ public class AiManager {
                         content)
                 .execute();
         return resp.getResult();
-    }
+    }*/
 
 }
