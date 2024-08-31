@@ -5,7 +5,9 @@ import com.baomidou.mybatisplus.annotation.*;
 import java.io.Serializable;
 import java.util.Date;
 
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * 帖子
@@ -19,6 +21,9 @@ public class Chart implements Serializable {
      */
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
+
+    public Chart() {
+    }
 
     /**
      * 图表名称
@@ -39,6 +44,16 @@ public class Chart implements Serializable {
      * 图标类型
      */
     private String chartType;
+
+    /**
+     * 图表状态
+     */
+    private Integer state;
+
+    /**
+     * 执行信息
+     */
+    private String execMessage;
 
     /**
      * 生成的图表数据
