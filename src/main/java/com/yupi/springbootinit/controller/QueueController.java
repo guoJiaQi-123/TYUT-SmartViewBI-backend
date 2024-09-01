@@ -26,7 +26,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 @RestController
 @RequestMapping("queue")
 @Slf4j
-@Profile({"dev"})
 public class QueueController {
 
     @Resource
