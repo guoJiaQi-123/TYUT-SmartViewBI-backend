@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.google.gson.Gson;
 import com.yupi.springbootinit.annotation.AuthCheck;
+import com.yupi.springbootinit.bizmq.BiMessageProducer;
 import com.yupi.springbootinit.common.BaseResponse;
 import com.yupi.springbootinit.common.DeleteRequest;
 import com.yupi.springbootinit.common.ErrorCode;
@@ -66,6 +67,9 @@ public class ChartController {
     @Resource
     private ThreadPoolExecutor threadPoolExecutor; // 执行AI生成的线程池
 
+    @Resource
+    private BiMessageProducer biMessageProducer; // 消息队列生产者
+
     private final static Gson GSON = new Gson();
 
 
@@ -91,7 +95,7 @@ public class ChartController {
         final long ONE_MB = 1024 * 1024L;
         ThrowUtils.throwIf(size > ONE_MB, ErrorCode.SYSTEM_ERROR, "文件大小超过1MB");
         String fileSuffix = FileUtil.getSuffix(filename);
-        List<String> validFileSuffix = Arrays.asList("xlsx","xls");
+        List<String> validFileSuffix = Arrays.asList("xlsx", "xls");
         ThrowUtils.throwIf(!validFileSuffix.contains(fileSuffix), ErrorCode.SYSTEM_ERROR, "文件后缀非法");
         // 在基础校验过后进行限流
         redisLimiterManager.doRateLimit("genChartByAI_" + loginUser.getId());
@@ -105,10 +109,12 @@ public class ChartController {
         userInput.append(goal).append("\n");
         userInput.append("原始数据：").append("\n");
         userInput.append(csvData);
-        final long aiModelId = 1659171950288818178L; // 模型ID
+        final long aiModelId = CommonConstant.AI_MODEL_ID; // 模型ID
         final String role = "user";
         // 鱼聪明AI
         String aiResponse = aiManager.doChat(aiModelId, userInput.toString());
+        log.info("人工智能生成的内容" + aiResponse);
+
         // 百度千帆大模型AI 【prompt优化暂时不到位】
 //        String aiResponse = aiManager.doChatByQianFan(role, userInput.toString());
         String[] split = aiResponse.split("【【【【【"); // 按照分隔符拆分
@@ -170,7 +176,7 @@ public class ChartController {
         userInput.append(goal).append("\n");
         userInput.append("原始数据：").append("\n");
         userInput.append(csvData);
-        final long aiModelId = 1659171950288818178L; // 模型ID
+        final long aiModelId = CommonConstant.AI_MODEL_ID; // 模型ID
         // 将图表数据保存到数据库
         Chart chart = new Chart();
         chart.setName(name);
@@ -217,6 +223,68 @@ public class ChartController {
         return ResultUtils.success(aiResponse);
     }
 
+
+    /**
+     * AI生成图表文件 （异步）
+     * @param multipartFile
+     * @param request
+     * @return
+     */
+    @PostMapping("/gen/async/mq")
+    public BaseResponse<AiResponse> genChartByAIAsyncMq(@RequestPart("file") MultipartFile multipartFile,
+                                                        GenChartByAIRequest genChartByAIRequest, HttpServletRequest request) {
+        String name = genChartByAIRequest.getName(); // 图表名
+        String goal = genChartByAIRequest.getGoal(); // 图表目标
+        String chartType = genChartByAIRequest.getChartType(); // 图标的类型
+        User loginUser = userService.getLoginUser(request);
+        // 校验  =》 分析目标不为null，图标名称要在20个字符以内
+        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
+        ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 20, ErrorCode.PARAMS_ERROR, "名称长度应该控制在20字符以内");
+        // 文件校验
+        String filename = multipartFile.getOriginalFilename();
+        long size = multipartFile.getSize();
+        final long ONE_MB = 1024 * 1024L;
+        ThrowUtils.throwIf(size > ONE_MB, ErrorCode.SYSTEM_ERROR, "文件大小超过1MB");
+        String fileSuffix = FileUtil.getSuffix(filename);
+        List<String> validFileSuffix = Arrays.asList("xlsx", "xls");
+        ThrowUtils.throwIf(!validFileSuffix.contains(fileSuffix), ErrorCode.SYSTEM_ERROR, "文件后缀非法");
+        // 在基础校验过后进行限流
+        redisLimiterManager.doRateLimit("genChartByAI_" + loginUser.getId());
+
+        String csvData = ExcelUtils.excelToCSV(multipartFile);
+        if (chartType != null) {
+            goal += "，请使用：" + chartType;
+        }
+        StringBuilder userInput = new StringBuilder();
+        userInput.append("分析需求：").append("\n");
+        userInput.append(goal).append("\n");
+        userInput.append("原始数据：").append("\n");
+        userInput.append(csvData);
+        final long aiModelId = 1659171950288818178L; // 模型ID
+        // 将图表数据保存到数据库
+        Chart chart = new Chart();
+        chart.setName(name);
+        chart.setGoal(goal);
+        chart.setChartData(csvData);
+        chart.setChartType(chartType);
+        chart.setUserId(loginUser.getId());
+        chart.setState(ChartStatus.CHART_SUCCEED.getStateCode());
+        boolean save = chartService.save(chart);
+        ThrowUtils.throwIf(!save, ErrorCode.SYSTEM_ERROR, "图表保存失败");
+
+        // 发送消息（chartId）到mq中，在消费者那边去完成任务
+        biMessageProducer.sendMessage(String.valueOf(chart.getId()));
+
+        AiResponse aiResponse = new AiResponse();
+        aiResponse.setChartId(chart.getId());
+        return ResultUtils.success(aiResponse);
+    }
+
+    /**
+     * 统一更新图表生成失败（各种原因）
+     * @param chartId
+     * @param execMessage
+     */
     private void handleChartUpdateError(long chartId, String execMessage) {
         Chart updateChartResult = new Chart();
         updateChartResult.setId(chartId);
